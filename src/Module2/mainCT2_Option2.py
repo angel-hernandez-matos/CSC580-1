@@ -76,19 +76,25 @@ class FutureSalesPredictor:
       import numpy as np
       import tensorflow as tf
       import pandas as pd
+      import matplotlib.pyplot as plt
       from sklearn.preprocessing import MinMaxScaler as scaler
+      from keras.models import Sequential as seq
+      from keras.layers import Input as inp, Dense as dense
+      from keras.models import load_model
       self.__np = np
       self.__tf = tf
       self.__pd = pd
-      self.__scaler = None
+      self.__plt = plt
+      self.__input = inp
+      self.__dense = dense
+      self.__history = None
+      self.__sequential = seq
       self.__test_data_df = None
       self.__scaled_testing = None
       self.__scaled_training = None
-      self.__training_data_df = None
       self.__min_max_scaler = scaler
-      self.__scaled_testing_df = None
-      self.__scaled_training_df = None
-
+      self.__load_model = load_model
+      self.__training_data_df = None
       self.__initialize_randomizer()
 
     def __initialize_randomizer(self):
@@ -104,11 +110,70 @@ class FutureSalesPredictor:
 
     def __scale_data(self):
         print("\nScaling data ...")
+        scaler = self.__min_max_scaler(feature_range=(0, 1))
+        self.__test_data_df = self.__pd.read_csv(self.__config.test_csv)
+        self.__training_data_df = self.__pd.read_csv(self.__config.training_csv)
+        scaled_training = scaler.fit_transform(self.__training_data_df)
+        scaled_testing = scaler.transform(self.__test_data_df)
+        print("Note: total_earnings values were scaled by multiplying by {:.10f} and adding {:.6f}"
+              .format(scaler.scale_[8], scaler.min_[8]))
+        scaled_training_df = self.__pd.DataFrame(scaled_training, columns=self.__training_data_df.columns.values)
+        scaled_testing_df = self.__pd.DataFrame(scaled_testing, columns=self.__test_data_df.columns.values)
+        scaled_training_df.to_csv("sales_data_training_scaled.csv", index=False)
+        scaled_testing_df.to_csv("sales_data_testing_scaled.csv", index=False)
+        # Let's save scaler values because we'll need it in the prediction
+        with open("scaler_values.txt", "w") as f: f.write(f"{scaler.scale_[8]},{scaler.min_[8]}")
 
+    def __train_model(self):
+        print("\nTraining model ...")
+        training_data_df = self.__pd.read_csv("sales_data_training_scaled.csv")
+        X = training_data_df.drop('total_earnings', axis=1).values
+        Y = training_data_df[['total_earnings']].values
+        model = self.__sequential()
+        model.add(self.__input(shape=(9,)))
+        model.add(self.__dense(50, activation='relu'))
+        model.add(self.__dense(25, activation='relu'))
+        model.add(self.__dense(1, activation='linear'))
+        model.compile(loss='mean_squared_error', optimizer='adam')
+        self.__history = model.fit(X, Y, epochs=self.__config.epochs, shuffle=False, verbose=2)
+        test_data_df = self.__pd.read_csv("sales_data_testing_scaled.csv")
+        X_test = test_data_df.drop('total_earnings', axis=1).values
+        Y_test = test_data_df[['total_earnings']].values
+        test_error_rate = model.evaluate(X_test, Y_test)
+        print("The mean squared error (MSE) for the test data set is: {}".format(test_error_rate))
+        model.save("trained_model.keras")
+        print("Model saved to disk as 'trained_model.keras'")
+
+    def __predict_new_product_earnings(self):
+        print("\nPredicting new product earnings ...")
+        model = self.__load_model("trained_model.keras")
+        X = self.__pd.read_csv("proposed_new_product.csv").values
+        prediction = model.predict(X)[0][0]
+        # Load scaler values (Save in __scale_data)
+        with open("scaler_values.txt", "r") as f:
+            scale, min_val = f.read().split(",")
+            scale = float(scale)
+            min_val = float(min_val)
+        # Undo scaling (Reverse scaling)
+        prediction = prediction - min_val
+        prediction = prediction / scale
+        print(f"Earnings Prediction for Proposed Product - ${prediction}")
+
+    def __show_graph(self):
+        self.__plt.figure(figsize=(10, 5))
+        self.__plt.plot(self.__history.history['loss'], label='Training Loss')
+        self.__plt.title('Model Training Loss Over Epochs')
+        self.__plt.xlabel('Epoch')
+        self.__plt.ylabel('Loss (MSE)')
+        self.__plt.legend()
+        self.__plt.grid(True)
+        self.__plt.show()
 
     def run_pipeline(self):
         self.__scale_data()
-
+        self.__train_model()
+        self.__predict_new_product_earnings()
+        self.__show_graph()
 
 class TestCaseRunner:
     @staticmethod
@@ -123,7 +188,7 @@ def clear_screen():
 def main():
     try:
         FutureSalesPredictor.suppress_warnings()
-        dependencies = ['numpy', 'tensorflow', 'pandas', 'scikit-learn']
+        dependencies = ['numpy', 'tensorflow', 'pandas', 'scikit-learn', 'matplotlib']
         for d in dependencies: DependencyChecker.ensure_package(d)
         clear_screen()
         print('*** Module 2 - Critical Thinking - Option 2 ***\n')
