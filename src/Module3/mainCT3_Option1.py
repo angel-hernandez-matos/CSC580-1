@@ -1,6 +1,6 @@
 # File: mainCT3_Option1.py
 # Written by: Angel Hernandez
-# Description: Module 3 - Critical Thinking - Option 2
+# Description: Module 3 - Critical Thinking - Option 1
 # Requirement(s): Linear Regression Using TensorFlow
 #                 In this assignment, you will use TensorFlow to predict the next output from a given set of random
 #                 inputs. Start by importing the necessary libraries. You will use Numpy along with TensorFlow for
