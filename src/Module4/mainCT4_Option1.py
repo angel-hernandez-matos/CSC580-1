@@ -95,24 +95,39 @@ class HumanReactionPredictor:
         print("Test Accuracy:", test_acc)
 
     def __launch_tensorboard(self):
-        # Full path to TensorBoard executable on Windows
         logdir = os.path.abspath(self.__log_dir)
-        tb_exe = os.path.join(os.path.dirname(sys.executable), "Scripts", "tensorboard.exe")
-        # Build command
-        cmd = [tb_exe, "--logdir", logdir, "--port", "6006"]
-        print("Launching TensorBoard with:", " ".join(cmd))
-        # Launch as a fully independent process
-        process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        # Give TensorBoard time to start and open browser
-        time.sleep(3)
-        webbrowser.open("http://localhost:6006")
-        print("\nTensorBoard is running at http://localhost:6006")
-        # Wait for user input and terminate Tensorboard
-        print("Press ENTER to stop TensorBoard and continue...")
-        input()
-        print("Stopping TensorBoard...")
-        process.terminate()
-        print("TensorBoard stopped.\n")
+        # Determine platform
+        is_windows = os.name == "nt"
+        # Build the correct TensorBoard command
+        if is_windows:
+            # Windows: tensorboard.exe lives in Python310/Scripts/
+            tb_exe = os.path.join(
+                os.path.dirname(sys.executable),
+                "Scripts",
+                "tensorboard.exe"
+            )
+            cmd = [tb_exe, "--logdir", logdir, "--port", "6006"]
+        else:
+            # Linux/macOS: tensorboard is usually in /home/local/USER/bin
+            cmd = [os.path.expanduser("~/.local/bin/tensorboard"), "--logdir", logdir, "--port", "6006"]
+        print("\nLaunching TensorBoard with:", " ".join(cmd))
+
+        try:
+            # Start TensorBoard as a normal external process
+            process = subprocess.Popen(cmd)
+            # Give TensorBoard time to start
+            time.sleep(3)
+            webbrowser.open("http://localhost:6006")
+            print("\nTensorBoard is running at http://localhost:6006")
+            print("Press ENTER to stop TensorBoard and continue...")
+            input()  # Wait for user input
+            print("Stopping TensorBoard...")
+            process.terminate()
+            print("TensorBoard stopped.\n")
+        except FileNotFoundError:
+            print("\nERROR: TensorBoard executable not found.")
+            print("Try installing it with:")
+            print("  pip install tensorboard\n")
 
     @staticmethod
     def suppress_warnings():
